@@ -329,7 +329,23 @@ function validarReporteImportado(item, criterios, vias) {
   if (item.origen !== "campo" && item.origen !== "ciudadano") {
     return { valido: false, motivo: "Origen inválido ('" + item.origen + "')." };
   }
-  if (typeof item.fecha_hora !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(item.fecha_hora)) {
+  var partesFechaHora = typeof item.fecha_hora === "string"
+    ? /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(item.fecha_hora)
+    : null;
+  var fechaHoraValida = false;
+  if (partesFechaHora) {
+    var anio = Number(partesFechaHora[1]);
+    var mes = Number(partesFechaHora[2]);
+    var dia = Number(partesFechaHora[3]);
+    var hora = Number(partesFechaHora[4]);
+    var minuto = Number(partesFechaHora[5]);
+    var diasPorMes = [31, (anio % 4 === 0 && (anio % 100 !== 0 || anio % 400 === 0)) ? 29 : 28,
+      31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    fechaHoraValida = anio >= 1 && mes >= 1 && mes <= 12 &&
+      dia >= 1 && dia <= diasPorMes[mes - 1] &&
+      hora >= 0 && hora <= 23 && minuto >= 0 && minuto <= 59;
+  }
+  if (!fechaHoraValida) {
     return { valido: false, motivo: "Fecha/hora inválida ('" + item.fecha_hora + "')." };
   }
   if (typeof item.lat !== "number" || typeof item.lng !== "number" || isNaN(item.lat) || isNaN(item.lng)) {
