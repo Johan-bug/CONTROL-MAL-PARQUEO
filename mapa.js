@@ -188,7 +188,7 @@ function cargarTrazadosCuadrasOSM(vias) {
   });
 }
 
-function dibujarCuadrasCaptura(vias) {
+function dibujarCuadrasCaptura(vias, alElegirUbicacion) {
   if (!capaCuadrasCaptura) return;
   capaCuadrasCaptura.clearLayers();
   polilineasCuadras = {};
@@ -263,7 +263,7 @@ function iniciarMapaCaptura(idContenedor, vias, alElegirUbicacion) {
   polilineasCuadras = {};
 
   // Las cuadras solo se dibujan cuando se obtuvo su geometría vial real de OSM.
-  dibujarCuadrasCaptura(vias);
+  dibujarCuadrasCaptura(vias, alElegirUbicacion);
   cargarTrazadosCuadrasOSM(vias).then(function () {
     dibujarCuadrasCaptura(vias);
     dibujarCuadrasConEvidenciaRegistros(ultimosReportesRegistros, ultimoViasRegistros);
