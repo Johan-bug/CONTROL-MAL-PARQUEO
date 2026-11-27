@@ -1,6 +1,6 @@
 {
   "zona": {
-    "nombre": "Unimagdalena – Villa Marbella y Mercado Público · Santa Marta",
+    "nombre": "Santa Marta — Villa Marbella, Semáforo de Cañaveral y Mercado Público",
     "centro": [
       11.2335,
       -74.1972
@@ -16,41 +16,9 @@
   },
   "cuadras": [
     {
-      "id": "CR32-C22-C24",
-      "nombre": "Carrera 32 entre Calles 22 y 24 (Portería Principal Unimagdalena)",
-      "sector": "Unimagdalena - Villa Marbella",
-      "tipo_via": "arterial",
-      "extremos": [
-        [
-          11.2266,
-          -74.1869
-        ],
-        [
-          11.225,
-          -74.1871
-        ]
-      ]
-    },
-    {
-      "id": "CR32-C24-C26",
-      "nombre": "Carrera 32 entre Calles 24 y 26 (Frente a Unimagdalena · Zona comercial y paradero)",
-      "sector": "Unimagdalena - Villa Marbella",
-      "tipo_via": "arterial",
-      "extremos": [
-        [
-          11.225,
-          -74.1871
-        ],
-        [
-          11.2233,
-          -74.1873
-        ]
-      ]
-    },
-    {
       "id": "CR32-C26-C28",
       "nombre": "Carrera 32 entre Calles 26 y 28 (Costado Urbanización Villa Marbella)",
-      "sector": "Unimagdalena - Villa Marbella",
+      "sector": "Villa Marbella - Cañaveral",
       "tipo_via": "arterial",
       "extremos": [
         [
@@ -66,7 +34,7 @@
     {
       "id": "CR32-C28-C29",
       "nombre": "Carrera 32 entre Calles 28 y 29 (Tramo Villa Marbella – Semáforo de Cañaveral)",
-      "sector": "Unimagdalena - Villa Marbella",
+      "sector": "Villa Marbella - Cañaveral",
       "tipo_via": "arterial",
       "extremos": [
         [
@@ -82,7 +50,7 @@
     {
       "id": "C29-CR31-CR32",
       "nombre": "Calle 29 / Av. del Ferrocarril entre Carreras 31 y 32 (Semáforo de Cañaveral)",
-      "sector": "Unimagdalena - Villa Marbella",
+      "sector": "Villa Marbella - Cañaveral",
       "tipo_via": "arterial",
       "extremos": [
         [
@@ -96,25 +64,9 @@
       ]
     },
     {
-      "id": "C25-CR31-CR32",
-      "nombre": "Calle 25 entre Carreras 31 y 32 (Acceso comercial frente a Unimagdalena)",
-      "sector": "Unimagdalena - Villa Marbella",
-      "tipo_via": "secundaria",
-      "extremos": [
-        [
-          11.2243,
-          -74.189
-        ],
-        [
-          11.2241,
-          -74.1872
-        ]
-      ]
-    },
-    {
       "id": "C26-CR31-CR32",
       "nombre": "Calle 26 entre Carreras 31 y 32 (Entrada norte Urbanización Villa Marbella)",
-      "sector": "Unimagdalena - Villa Marbella",
+      "sector": "Villa Marbella - Cañaveral",
       "tipo_via": "secundaria",
       "extremos": [
         [
@@ -130,7 +82,7 @@
     {
       "id": "C27-CR31-CR32",
       "nombre": "Calle 27 entre Carreras 31 y 32 (Vía interior Urbanización Villa Marbella)",
-      "sector": "Unimagdalena - Villa Marbella",
+      "sector": "Villa Marbella - Cañaveral",
       "tipo_via": "secundaria",
       "extremos": [
         [
@@ -146,7 +98,7 @@
     {
       "id": "CR31-C26-C28",
       "nombre": "Carrera 31 entre Calles 26 y 28 (Calle interna paralela Villa Marbella)",
-      "sector": "Unimagdalena - Villa Marbella",
+      "sector": "Villa Marbella - Cañaveral",
       "tipo_via": "secundaria",
       "extremos": [
         [
@@ -162,7 +114,7 @@
     {
       "id": "C28-CR31-CR32",
       "nombre": "Calle 28 entre Carreras 31 y 32 (Límite sur Villa Marbella – Cañaveral)",
-      "sector": "Unimagdalena - Villa Marbella",
+      "sector": "Villa Marbella - Cañaveral",
       "tipo_via": "secundaria",
       "extremos": [
         [
