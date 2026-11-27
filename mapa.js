@@ -112,16 +112,23 @@ function resolverGeometriaCuadraOSM(cuadra, viasOSM) {
   for (var i = 0; i < viasOSM.length; i++) {
     var via = viasOSM[i];
     if (!Array.isArray(via.geometry) || via.geometry.length < 2) continue;
-    var p1 = puntoMasCercanoEnViaOSM(cuadra.extremos[0], via.geometry);
-    var p2 = puntoMasCercanoEnViaOSM(cuadra.extremos[1], via.geometry);
+    // Overpass entrega cada punto como {lat, lon}; Leaflet requiere [lat, lng].
+    var geometria = via.geometry.map(function (p) {
+      if (Array.isArray(p)) return p;
+      if (p && typeof p.lat === "number" && typeof p.lon === "number") return [p.lat, p.lon];
+      return null;
+    }).filter(function (p) { return p !== null; });
+    if (geometria.length < 2) continue;
+    var p1 = puntoMasCercanoEnViaOSM(cuadra.extremos[0], geometria);
+    var p2 = puntoMasCercanoEnViaOSM(cuadra.extremos[1], geometria);
     if (!p1 || !p2) continue;
     var puntuacion = p1.distancia + p2.distancia;
     if (!mejor || puntuacion < mejor.puntuacion) {
-      mejor = { via: via, p1: p1, p2: p2, puntuacion: puntuacion };
+      mejor = { geometria: geometria, p1: p1, p2: p2, puntuacion: puntuacion };
     }
   }
   if (!mejor || mejor.p1.distancia > 30 || mejor.p2.distancia > 30) return null;
-  var trazado = recortarViaOSM(mejor.via.geometry, mejor.p1, mejor.p2);
+  var trazado = recortarViaOSM(mejor.geometria, mejor.p1, mejor.p2);
   if (trazado.length < 2) return null;
   var longitud = 0;
   for (var k = 1; k < trazado.length; k++) {
