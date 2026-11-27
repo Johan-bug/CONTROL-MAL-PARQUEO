@@ -121,6 +121,16 @@ function resolverGeometriaCuadraOSM(cuadra, viasOSM) {
   if (!mejor || mejor.p1.distancia > 45 || mejor.p2.distancia > 45) return null;
   var trazado = recortarViaOSM(mejor.via.geometry, mejor.p1, mejor.p2);
   if (trazado.length < 2) return null;
+  var longitud = 0;
+  for (var k = 1; k < trazado.length; k++) {
+    var dLat = (trazado[k][0] - trazado[k - 1][0]) * 111320;
+    var dLng = (trazado[k][1] - trazado[k - 1][1]) * 111320 * Math.cos(trazado[k][0] * Math.PI / 180);
+    longitud += Math.sqrt(dLat * dLat + dLng * dLng);
+  }
+  var dExtLat = (cuadra.extremos[1][0] - cuadra.extremos[0][0]) * 111320;
+  var dExtLng = (cuadra.extremos[1][1] - cuadra.extremos[0][1]) * 111320 * Math.cos(cuadra.extremos[0][0] * Math.PI / 180);
+  var distanciaExtremos = Math.sqrt(dExtLat * dExtLat + dExtLng * dExtLng);
+  if (longitud > 350 || longitud > distanciaExtremos * 2.5 + 30) return null;
   return trazado;
 }
 
@@ -265,7 +275,7 @@ function iniciarMapaCaptura(idContenedor, vias, alElegirUbicacion) {
   // Las cuadras solo se dibujan cuando se obtuvo su geometría vial real de OSM.
   dibujarCuadrasCaptura(vias, alElegirUbicacion);
   cargarTrazadosCuadrasOSM(vias).then(function () {
-    dibujarCuadrasCaptura(vias);
+    dibujarCuadrasCaptura(vias, alElegirUbicacion);
     dibujarCuadrasConEvidenciaRegistros(ultimosReportesRegistros, ultimoViasRegistros);
   });
 
@@ -395,8 +405,8 @@ function iniciarMapaRegistros(idContenedor, vias) {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }).addTo(mapaRegistros);
 
-  capaMarcadoresRegistros = L.layerGroup().addTo(mapaRegistros);
   capaCuadrasRegistros = L.layerGroup().addTo(mapaRegistros);
+  capaMarcadoresRegistros = L.layerGroup().addTo(mapaRegistros);
 
   // Avisar si Leaflet.heat no cargó
   var avisoCalor = document.getElementById("aviso-sin-calor");
