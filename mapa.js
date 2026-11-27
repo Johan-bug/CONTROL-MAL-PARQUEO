@@ -10,6 +10,9 @@ var marcadorCaptura = null;
 var capaCuadrasCaptura = null;
 var capaReportesCaptura = null;
 var polilineasCuadras = {};
+var capaCuadrasRegistros = null;
+var trazadosCuadrasOSM = {};
+var estadoCargaTrazadosOSM = "pendiente";
 
 var mapaRegistros = null;
 var capaMarcadoresRegistros = null;
@@ -42,6 +45,199 @@ function obtenerColorNivel(nivel) {
   return "#16a34a";                         // Verde (Bajo)
 }
 
+
+/**
+ * Obtiene geometrías reales de calles desde OpenStreetMap (Overpass).
+ * Nunca utiliza los extremos como sustituto visual: si no hay coincidencia
+ * suficientemente cercana, la cuadra queda sin dibujar.
+ */
+function distanciaPuntoSegmentoOSM(p, a, b) {
+  var lat0 = p[0] * Math.PI / 180;
+  var escalaX = 111320 * Math.cos(lat0);
+  var escalaY = 111320;
+  var ax = (a[1] - p[1]) * escalaX;
+  var ay = (a[0] - p[0]) * escalaY;
+  var bx = (b[1] - p[1]) * escalaX;
+  var by = (b[0] - p[0]) * escalaY;
+  var dx = bx - ax;
+  var dy = by - ay;
+  var denom = dx * dx + dy * dy;
+  var t = denom ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / denom)) : 0;
+  var x = ax + t * dx;
+  var y = ay + t * dy;
+  return {
+    distancia: Math.sqrt(x * x + y * y),
+    t: t,
+    punto: [p[0] + y / escalaY, p[1] + x / escalaX]
+  };
+}
+
+function puntoMasCercanoEnViaOSM(p, geometria) {
+  var mejor = null;
+  for (var i = 0; i < geometria.length - 1; i++) {
+    var candidato = distanciaPuntoSegmentoOSM(p, geometria[i], geometria[i + 1]);
+    if (!mejor || candidato.distancia < mejor.distancia) {
+      mejor = {
+        distancia: candidato.distancia,
+        orden: i + candidato.t,
+        indice: i,
+        punto: candidato.punto
+      };
+    }
+  }
+  return mejor;
+}
+
+function recortarViaOSM(geometria, inicio, fin) {
+  var a = inicio;
+  var b = fin;
+  if (a.orden > b.orden) {
+    a = fin;
+    b = inicio;
+  }
+  var puntos = [a.punto];
+  for (var i = a.indice + 1; i <= b.indice; i++) {
+    if (i >= 0 && i < geometria.length) puntos.push([geometria[i][0], geometria[i][1]]);
+  }
+  puntos.push(b.punto);
+  if (inicio.orden > fin.orden) puntos.reverse();
+  return puntos;
+}
+
+function resolverGeometriaCuadraOSM(cuadra, viasOSM) {
+  if (!cuadra || !Array.isArray(cuadra.extremos) || cuadra.extremos.length < 2) return null;
+  var mejor = null;
+  for (var i = 0; i < viasOSM.length; i++) {
+    var via = viasOSM[i];
+    if (!Array.isArray(via.geometry) || via.geometry.length < 2) continue;
+    var p1 = puntoMasCercanoEnViaOSM(cuadra.extremos[0], via.geometry);
+    var p2 = puntoMasCercanoEnViaOSM(cuadra.extremos[1], via.geometry);
+    if (!p1 || !p2) continue;
+    var puntuacion = p1.distancia + p2.distancia;
+    if (!mejor || puntuacion < mejor.puntuacion) {
+      mejor = { via: via, p1: p1, p2: p2, puntuacion: puntuacion };
+    }
+  }
+  if (!mejor || mejor.p1.distancia > 45 || mejor.p2.distancia > 45) return null;
+  var trazado = recortarViaOSM(mejor.via.geometry, mejor.p1, mejor.p2);
+  if (trazado.length < 2) return null;
+  return trazado;
+}
+
+function consultarOverpassOSM(cuadras, intento) {
+  intento = intento || 0;
+  var puntos = [];
+  for (var i = 0; i < cuadras.length; i++) {
+    if (cuadras[i].extremos) {
+      puntos.push(cuadras[i].extremos[0], cuadras[i].extremos[1]);
+    }
+  }
+  if (!puntos.length) return Promise.resolve([]);
+  var sur = Math.min.apply(null, puntos.map(function (p) { return p[0]; })) - 0.002;
+  var norte = Math.max.apply(null, puntos.map(function (p) { return p[0]; })) + 0.002;
+  var oeste = Math.min.apply(null, puntos.map(function (p) { return p[1]; })) - 0.002;
+  var este = Math.max.apply(null, puntos.map(function (p) { return p[1]; })) + 0.002;
+  var bbox = sur + "," + oeste + "," + norte + "," + este;
+  var consulta = '[out:json][timeout:25];way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service)$"](' + bbox + ');out geom;';
+  var servidores = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
+  return fetch(servidores[intento], {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+    body: "data=" + encodeURIComponent(consulta)
+  }).then(function (respuesta) {
+    if (!respuesta.ok) throw new Error("Overpass no disponible");
+    return respuesta.json();
+  }).then(function (datos) {
+    return Array.isArray(datos.elements) ? datos.elements : [];
+  }).catch(function (error) {
+    if (intento + 1 < servidores.length) return consultarOverpassOSM(cuadras, intento + 1);
+    throw error;
+  });
+}
+
+function cargarTrazadosCuadrasOSM(vias) {
+  var cuadras = vias && Array.isArray(vias.cuadras) ? vias.cuadras : [];
+  var grupos = [[], []];
+  for (var i = 0; i < cuadras.length; i++) {
+    var c = cuadras[i];
+    var latMedia = (c.extremos[0][0] + c.extremos[1][0]) / 2;
+    grupos[latMedia > 11.23 ? 1 : 0].push(c);
+  }
+  var consultas = grupos.filter(function (g) { return g.length > 0; }).map(function (g) {
+    return consultarOverpassOSM(g).then(function (elementos) {
+      return { cuadras: g, vias: elementos };
+    });
+  });
+  return Promise.all(consultas).then(function (resultados) {
+    var resueltas = {};
+    for (var g = 0; g < resultados.length; g++) {
+      var bloque = resultados[g];
+      for (var j = 0; j < bloque.cuadras.length; j++) {
+        var cuadra = bloque.cuadras[j];
+        var trazado = resolverGeometriaCuadraOSM(cuadra, bloque.vias);
+        if (trazado) resueltas[cuadra.id] = trazado;
+      }
+    }
+    trazadosCuadrasOSM = resueltas;
+    estadoCargaTrazadosOSM = "completo";
+    return resueltas;
+  }).catch(function () {
+    trazadosCuadrasOSM = {};
+    estadoCargaTrazadosOSM = "error";
+    return {};
+  });
+}
+
+function dibujarCuadrasCaptura(vias) {
+  if (!capaCuadrasCaptura) return;
+  capaCuadrasCaptura.clearLayers();
+  polilineasCuadras = {};
+  if (!vias || !Array.isArray(vias.cuadras)) return;
+  for (var i = 0; i < vias.cuadras.length; i++) {
+    var cuadra = vias.cuadras[i];
+    var trazado = trazadosCuadrasOSM[cuadra.id];
+    if (!trazado) continue;
+    var linea = L.polyline(trazado, { color: "#475569", weight: 5, opacity: 0.7 });
+    linea.bindTooltip(cuadra.nombre + " (" + cuadra.tipo_via + ")", { sticky: true });
+    linea.on("click", function (e) {
+      if (typeof alElegirUbicacion === "function") alElegirUbicacion(e.latlng.lat, e.latlng.lng);
+    });
+    linea.addTo(capaCuadrasCaptura);
+    polilineasCuadras[cuadra.id] = linea;
+  }
+}
+
+function dibujarCuadrasConEvidenciaRegistros(listaReportes, vias) {
+  if (!capaCuadrasRegistros || !vias || !Array.isArray(vias.cuadras)) return;
+  capaCuadrasRegistros.clearLayers();
+  var resumen = {};
+  for (var i = 0; i < listaReportes.length; i++) {
+    var r = listaReportes[i];
+    if (!r || !r.cuadra) continue;
+    if (!resumen[r.cuadra]) resumen[r.cuadra] = { total: 0, altos: 0, medios: 0, bajos: 0, ids: [] };
+    var item = resumen[r.cuadra];
+    item.total++;
+    item.ids.push(r.id);
+    var nivel = String(r.criticidad && r.criticidad.nivel || "bajo").toLowerCase();
+    if (nivel === "alto") item.altos++;
+    else if (nivel === "medio") item.medios++;
+    else item.bajos++;
+  }
+  for (var j = 0; j < vias.cuadras.length; j++) {
+    var cuadra = vias.cuadras[j];
+    var datos = resumen[cuadra.id];
+    var trazado = trazadosCuadrasOSM[cuadra.id];
+    if (!datos || !trazado) continue;
+    var color = datos.altos ? "#dc2626" : (datos.medios ? "#d97706" : "#16a34a");
+    L.polyline(trazado, { color: color, weight: 7, opacity: 0.9 })
+      .bindPopup("<strong>" + cuadra.nombre + "</strong><br>" +
+        "Evidencias: " + datos.total + "<br>" +
+        "Criticidad alta: " + datos.altos + " · media: " + datos.medios + " · baja: " + datos.bajos +
+        "<br><small>" + datos.ids.join(", ") + "</small>")
+      .addTo(capaCuadrasRegistros);
+  }
+}
+
 /**
  * Inicializa el mapa de la vista Captura con OpenStreetMap y las cuadras de vias.json.
  */
@@ -66,32 +262,12 @@ function iniciarMapaCaptura(idContenedor, vias, alElegirUbicacion) {
   capaReportesCaptura = L.layerGroup().addTo(mapaCaptura);
   polilineasCuadras = {};
 
-  // Dibujar las cuadras definidas en vias.json como líneas interactivas
-  if (vias && Array.isArray(vias.cuadras)) {
-    for (var i = 0; i < vias.cuadras.length; i++) {
-      var cuadra = vias.cuadras[i];
-      if (!Array.isArray(cuadra.extremos) || cuadra.extremos.length < 2) continue;
-
-      var linea = L.polyline(cuadra.extremos, {
-        color: "#475569",
-        weight: 5,
-        opacity: 0.7
-      });
-
-      linea.bindTooltip(cuadra.nombre + " (" + cuadra.tipo_via + ")", {
-        sticky: true
-      });
-
-      linea.on("click", function (e) {
-        if (typeof alElegirUbicacion === "function") {
-          alElegirUbicacion(e.latlng.lat, e.latlng.lng);
-        }
-      });
-
-      linea.addTo(capaCuadrasCaptura);
-      polilineasCuadras[cuadra.id] = linea;
-    }
-  }
+  // Las cuadras solo se dibujan cuando se obtuvo su geometría vial real de OSM.
+  dibujarCuadrasCaptura(vias);
+  cargarTrazadosCuadrasOSM(vias).then(function () {
+    dibujarCuadrasCaptura(vias);
+    dibujarCuadrasConEvidenciaRegistros(ultimosReportesRegistros, ultimoViasRegistros);
+  });
 
   mapaCaptura.on("click", function (e) {
     if (typeof alElegirUbicacion === "function") {
@@ -220,6 +396,7 @@ function iniciarMapaRegistros(idContenedor, vias) {
   }).addTo(mapaRegistros);
 
   capaMarcadoresRegistros = L.layerGroup().addTo(mapaRegistros);
+  capaCuadrasRegistros = L.layerGroup().addTo(mapaRegistros);
 
   // Avisar si Leaflet.heat no cargó
   var avisoCalor = document.getElementById("aviso-sin-calor");
@@ -296,6 +473,7 @@ function actualizarMarcadoresRegistros(listaReportes, vias) {
   if (!leafletDisponible() || !mapaRegistros || !capaMarcadoresRegistros) return;
 
   capaMarcadoresRegistros.clearLayers();
+  dibujarCuadrasConEvidenciaRegistros(ultimosReportesRegistros, ultimoViasRegistros);
 
   if (capaCalorRegistros && mapaRegistros.hasLayer(capaCalorRegistros)) {
     mapaRegistros.removeLayer(capaCalorRegistros);
