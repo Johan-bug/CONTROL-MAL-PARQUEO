@@ -13,6 +13,8 @@ var polilineasCuadras = {};
 var capaCuadrasRegistros = null;
 var trazadosCuadrasOSM = {};
 var estadoCargaTrazadosOSM = "pendiente";
+var controlAvisoOSMCaptura = null;
+var controlAvisoOSMRegistros = null;
 
 var mapaRegistros = null;
 var capaMarcadoresRegistros = null;
@@ -165,6 +167,21 @@ function consultarOverpassOSM(cuadras, intento) {
   });
 }
 
+function actualizarAvisoTrazadosOSM(mapa, controlActual, texto) {
+  if (!mapa) return controlActual;
+  if (!controlActual) {
+    controlActual = L.control({ position: "topright" });
+    controlActual.onAdd = function () {
+      var div = L.DomUtil.create("div", "aviso-trazados-osm");
+      div.style.cssText = "background:#fff;padding:7px 10px;border:1px solid #cbd5e1;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.18);font-size:12px;max-width:220px;line-height:1.35;color:#334155";
+      return div;
+    };
+    controlActual.addTo(mapa);
+  }
+  controlActual.getContainer().textContent = texto;
+  return controlActual;
+}
+
 function cargarTrazadosCuadrasOSM(vias) {
   var cuadras = vias && Array.isArray(vias.cuadras) ? vias.cuadras : [];
   var grupos = [[], []];
@@ -176,6 +193,8 @@ function cargarTrazadosCuadrasOSM(vias) {
   var consultas = grupos.filter(function (g) { return g.length > 0; }).map(function (g) {
     return consultarOverpassOSM(g).then(function (elementos) {
       return { cuadras: g, vias: elementos };
+    }).catch(function () {
+      return { cuadras: g, vias: [] };
     });
   });
   return Promise.all(consultas).then(function (resultados) {
@@ -189,7 +208,8 @@ function cargarTrazadosCuadrasOSM(vias) {
       }
     }
     trazadosCuadrasOSM = resueltas;
-    estadoCargaTrazadosOSM = "completo";
+    estadoCargaTrazadosOSM = Object.keys(resueltas).length === cuadras.length ? "completo" :
+      (Object.keys(resueltas).length > 0 ? "parcial" : "error");
     return resueltas;
   }).catch(function () {
     trazadosCuadrasOSM = {};
@@ -274,9 +294,17 @@ function iniciarMapaCaptura(idContenedor, vias, alElegirUbicacion) {
 
   // Las cuadras solo se dibujan cuando se obtuvo su geometría vial real de OSM.
   dibujarCuadrasCaptura(vias, alElegirUbicacion);
-  cargarTrazadosCuadrasOSM(vias).then(function () {
+  controlAvisoOSMCaptura = actualizarAvisoTrazadosOSM(mapaCaptura, controlAvisoOSMCaptura, "Consultando trazados viales de OpenStreetMap...");
+  cargarTrazadosCuadrasOSM(vias).then(function (trazados) {
     dibujarCuadrasCaptura(vias, alElegirUbicacion);
     dibujarCuadrasConEvidenciaRegistros(ultimosReportesRegistros, ultimoViasRegistros);
+    var total = vias && Array.isArray(vias.cuadras) ? vias.cuadras.length : 0;
+    var disponibles = Object.keys(trazados).length;
+    var mensaje = estadoCargaTrazadosOSM === "error" ?
+      "No se pudieron verificar trazados viales. No se dibujaron líneas aproximadas." :
+      "Cuadras con trazado OSM verificado: " + disponibles + " de " + total + ".";
+    controlAvisoOSMCaptura = actualizarAvisoTrazadosOSM(mapaCaptura, controlAvisoOSMCaptura, mensaje);
+    controlAvisoOSMRegistros = actualizarAvisoTrazadosOSM(mapaRegistros, controlAvisoOSMRegistros, mensaje);
   });
 
   mapaCaptura.on("click", function (e) {
@@ -407,6 +435,9 @@ function iniciarMapaRegistros(idContenedor, vias) {
 
   capaCuadrasRegistros = L.layerGroup().addTo(mapaRegistros);
   capaMarcadoresRegistros = L.layerGroup().addTo(mapaRegistros);
+  if (estadoCargaTrazadosOSM === "pendiente") {
+    controlAvisoOSMRegistros = actualizarAvisoTrazadosOSM(mapaRegistros, controlAvisoOSMRegistros, "Consultando trazados viales de OpenStreetMap...");
+  }
 
   // Avisar si Leaflet.heat no cargó
   var avisoCalor = document.getElementById("aviso-sin-calor");
