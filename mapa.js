@@ -120,7 +120,7 @@ function resolverGeometriaCuadraOSM(cuadra, viasOSM) {
       mejor = { via: via, p1: p1, p2: p2, puntuacion: puntuacion };
     }
   }
-  if (!mejor || mejor.p1.distancia > 45 || mejor.p2.distancia > 45) return null;
+  if (!mejor || mejor.p1.distancia > 30 || mejor.p2.distancia > 30) return null;
   var trazado = recortarViaOSM(mejor.via.geometry, mejor.p1, mejor.p2);
   if (trazado.length < 2) return null;
   var longitud = 0;
@@ -150,7 +150,7 @@ function consultarOverpassOSM(cuadras, intento) {
   var oeste = Math.min.apply(null, puntos.map(function (p) { return p[1]; })) - 0.002;
   var este = Math.max.apply(null, puntos.map(function (p) { return p[1]; })) + 0.002;
   var bbox = sur + "," + oeste + "," + norte + "," + este;
-  var consulta = '[out:json][timeout:25];way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service)$"](' + bbox + ');out geom;';
+  var consulta = '[out:json][timeout:25];way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|road)$"](' + bbox + ');out geom;';
   var servidores = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
   return fetch(servidores[intento], {
     method: "POST",
